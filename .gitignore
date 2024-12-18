@@ -9,12 +9,6 @@ model_creation/models/*
 sdkconfig
 tools
 
-# Dependencies extracted from submodules
-components/*
-# Submodules from which components are extracted
-!components/sources
-# Preferrably add non-submodule dependencies as exceptions using `!`
-
 # Visual Studio Code
 .vscode
 
