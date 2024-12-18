@@ -9,5 +9,5 @@ set(SOURCES ./src/main.cpp
 
 idf_component_register(SRCS ${SOURCES}
 						INCLUDE_DIRS . inc
-						REQUIRES freertos esp_common tfmicro esp-nn esp_timer
+						REQUIRES freertos esp_common tfmicro esp-nn esp_timer esp32-akri ota-service esp_http_server
 						PRIV_REQUIRES test_data spi_flash esp_netif esp_wifi nvs_flash)
