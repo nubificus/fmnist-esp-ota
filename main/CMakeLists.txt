@@ -5,7 +5,8 @@ set(SOURCES ./src/main.cpp
 			./src/PredictionInterpreter.cpp
 			./src/PredictionHandler.cpp
 			./src/wifi.c
-			./src/tcp_client.c)
+			./src/tcp_client.c
+			./src/http_server.c)
 
 idf_component_register(SRCS ${SOURCES}
 						INCLUDE_DIRS . inc

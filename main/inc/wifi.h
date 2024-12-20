@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-esp_err_t connect_wifi(const char* ssid, const char* passwd);
+esp_err_t connect_wifi();
 
 #ifdef __cplusplus
 }

@@ -4,6 +4,9 @@ compile_commands.json
 results.txt
 dependencies.lock
 
+.clang-format
+.clang-tidy
+
 # Data and trained models
 model_creation/data/*
 model_creation/models/*

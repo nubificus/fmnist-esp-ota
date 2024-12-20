@@ -5,7 +5,7 @@ import sys
 
 labels = ["Tshirt_top", "Trouser", "Pullover", "Dress", "Coat",
 			"Sandal", "Shirt", "Sneaker", "Bag", "Ankle_boot"]
-IMAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_data")
+IMAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../test_data")
 
 def load_images(image_dir):
 	images = []
