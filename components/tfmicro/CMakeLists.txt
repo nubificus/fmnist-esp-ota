@@ -55,7 +55,7 @@ idf_component_register(
                          "third_party/flatbuffers/include"
                          "third_party/ruy"
                          "third_party/kissfft"
-            REQUIRES "esp-nn")
+            REQUIRES "esp-nn" "esp_timer")
 
 # Reduce the level of paranoia to be able to compile TF sources
 target_compile_options(${COMPONENT_LIB} PRIVATE
