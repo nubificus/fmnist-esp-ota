@@ -1,12 +1,11 @@
-
 import os
 import socket
 import struct
 import sys
 
 labels = ["Tshirt_top", "Trouser", "Pullover", "Dress", "Coat",
-			"Sandal", "Shirt", "Sneaker", "Bag", "Ankle_boot"]
-IMAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_data")
+		"Sandal", "Shirt", "Sneaker", "Bag", "Ankle_boot"]
+IMAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../test_data")
 
 def load_images(image_dir):
 	images = []
@@ -32,7 +31,7 @@ def recv_all(sock, length):
 	return data
 
 def main():
-	server_ip = '0.0.0.0'
+	server_ip = '192.168.11.52'  # Replace with the IP address of your ESP32 server
 	server_port = 1234
 	images = load_images(IMAGE_DIR)
 	image_count = len(images)
@@ -43,14 +42,9 @@ def main():
 
 	print(f"Loaded {image_count} images.")
 
-	server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-	server_socket.bind((server_ip, server_port))
-	server_socket.listen(1)
-	print(f"Server listening on {server_ip}:{server_port}")
-
-	conn, addr = server_socket.accept()
-	print(f"Connection from {addr}")
+	client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	client_socket.connect((server_ip, server_port))
+	print(f"Connected to server at {server_ip} : {server_port}")
 
 	image_index = 0
 	log_file = open("results.txt", "w")
@@ -60,21 +54,19 @@ def main():
 
 	try:
 		while True:
-			request = conn.recv(1)
-			if not request:
-				break
-			if request == b'\x01':  # Request byte from the client
-				label_index, image_data = images[image_index]
-				print(f"File: {labels[label_index]}")
-				conn.sendall(image_data)
-			else:
-				break
+			# Send request byte to the server
+			client_socket.sendall(b'\x01')
 
-			# Receive scores and inference time from the client
+			# Send image data to the server
+			label_index, image_data = images[image_index]
+			print(f"File: {labels[label_index]}")
+			client_socket.sendall(image_data)
+
+			# Receive scores and inference time from the server
 			num_labels = len(labels)
-			scores_data = recv_all(conn, 4 * num_labels)  # num_labels floats, 4 bytes each
+			scores_data = recv_all(client_socket, 4 * num_labels)  # num_labels floats, 4 bytes each
 			scores = struct.unpack(f'{num_labels}f', scores_data)
-			inference_time_data = recv_all(conn, 8)  # int64_t, 8 bytes
+			inference_time_data = recv_all(client_socket, 8)  # int64_t, 8 bytes
 			inference_time = struct.unpack('q', inference_time_data)[0]
 
 			# Print the results sorted in descending order
@@ -95,12 +87,10 @@ def main():
 	except Exception as e:
 		print(f"Exception: {e}")
 	finally:
-		conn.close()
-		server_socket.close()
+		client_socket.close()
 		if not log_file.closed:
 			log_file.close()
 		sys.stdout = original_stdout
 
 if __name__ == "__main__":
-	main()
-
+    main()

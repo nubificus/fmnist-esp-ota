@@ -1,6 +1,7 @@
 # required in project root for clang-tidy
 compile_commands.json
 
+/scripts/set_env_vars.sh
 results.txt
 dependencies.lock
 

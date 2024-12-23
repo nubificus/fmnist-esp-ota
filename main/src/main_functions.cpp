@@ -15,111 +15,131 @@
 #include "esp_timer.h"
 #include <esp_log.h>
 
+#include "tcp_server.h"
+
 // delay connstant -> 1 sec
 #define pdSECOND pdMS_TO_TICKS(1000)
 
 namespace {
-	// declare ErrorReporter, a TfLite class for error logging
+	// Declare ErrorReporter, a TfLite class for error logging
 	tflite::ErrorReporter *error_reporter = nullptr;
-	// declare the model that will hold the generated C array
+	// Declare the model that will hold the generated C array
 	const tflite::Model *model = nullptr;
-	// declare interpreter, runs inference using model and data
+	// Declare interpreter, runs inference using model and data
 	tflite::MicroInterpreter *interpreter = nullptr;
-	// declare model input and output as 1D-arrays
+	
+	// Declare model input and output tensor pointers
 	TfLiteTensor *model_input = nullptr;
 	TfLiteTensor *model_output = nullptr;
-	// create an area of memory to use for input, output, and intermediate arrays.
+	
+	// Create an area of memory to use for input, output, and intermediate arrays.
 	// the size of this will depend on the model you're using, and may need to be
 	// determined by experimentation.
 	constexpr int kTensorArenaSize = 32 * 1024;
 	alignas(16) uint8_t tensor_arena[kTensorArenaSize];
 
-	static const char *TAG = "[esp_cli]";
-
-	// processing pipeline
+	// Processing pipeline
 	DataProvider data_provider;
 	PredictionInterpreter prediction_interpreter;
 	PredictionHandler prediction_handler;
-} // namespace
+}
 
-void setup() {
+void setup(tcp_server_t *server) {
 	static tflite::MicroErrorReporter micro_error_reporter;
 	error_reporter = &micro_error_reporter;
 
-	// import the trained weights from the C array
+	// Import the trained weights from the C array
 	model = tflite::GetModel(fmnist_frozen_micro_model_cc_data);
 
+	// Check if the model is compatible with the TensorFlow Lite interpreter
 	if (model->version() != TFLITE_SCHEMA_VERSION) {
-		TF_LITE_REPORT_ERROR(error_reporter,
-							"Model provided is schema version %d not equal "
-							"to supported version %d.",
-							model->version(), TFLITE_SCHEMA_VERSION);
-		return;
+		error_reporter->Report("Model provided is schema version %d not equal "
+							   "to supported version %d.",
+								model->version(), TFLITE_SCHEMA_VERSION);
+		vTaskDelete(NULL);
 	}
 
-	// load all tflite micro built-in operations
-	// for example layers, activation functions, pooling
+	// Load all tflite micro built-in operations
 	static tflite::AllOpsResolver resolver;
 
-	// initialize interpreter
+	// Initialize interpreter
 	static tflite::MicroInterpreter static_interpreter(
 		model, resolver, tensor_arena, kTensorArenaSize, error_reporter);
 	interpreter = &static_interpreter;
 
-	// interpreter allocates memory according to model requirements
+	// Allocate tensor buffers
 	TfLiteStatus allocate_status = interpreter->AllocateTensors();
 	if (allocate_status != kTfLiteOk) {
-		TF_LITE_REPORT_ERROR(error_reporter, "AllocateTensors() failed\n");
-		return;
+		error_reporter->Report("AllocateTensors() failed");
+		vTaskDelete(NULL);
 	}
 
+	// Get pointers to the input and output tensors
 	model_input = interpreter->input(0);
 	model_output = interpreter->output(0);
 
+	// Check the model's input dimensions
 	if ((model_input->dims->size != 4 || (model_input->dims->data[0] != 1) ||
 		(model_input->dims->data[1] != 28) ||
 		(model_input->dims->data[2] != 28) || (model_input->dims->data[3] != 1) ||
 		(model_input->type != kTfLiteFloat32))) {
-		error_reporter->Report("Bad input tensor parameters in model\n");
-		return;
-	}
-
-	// initialize periphery
-	if (!data_provider.Init()) {
-		error_reporter->Report("Failed to initialize data provider\n");
-	}
-}
-
-void loop() {
-	// Read test data and copy them to the model input tensor
-	if (data_provider.Read(model_input)) {
-		error_reporter->Report("Failed ro read next image");
-		return;
-	}
-
-	// Run inference on pre-processed data
-	long long start_time = esp_timer_get_time();
-
-	TfLiteStatus invoke_status = interpreter->Invoke();
-	if (invoke_status != kTfLiteOk) {
-		error_reporter->Report("Invoke failed");
-		return;
-	}
-
-	long long inference_time = esp_timer_get_time() - start_time;
-
-	// Interpret raw model predictions
-	auto prediction = prediction_interpreter.GetResult(model_output, 0.0);
-
-	// Send the result to the server
-	prediction_handler.Update(prediction, data_provider.sock);
-
-	// Send inference time to the server
-	if (resp(data_provider.sock, (void*) &inference_time, sizeof(inference_time)) < 0) {
-		ESP_LOGE(TAG, "Failed to send response to server");
-		close(data_provider.sock);
+		error_reporter->Report("Unexpected input tensor parameters in model");
 		vTaskDelete(NULL);
 	}
 
-	vTaskDelay(0.5 * pdSECOND);
+	// Initialize the ESP32 server
+	int err = tcp_server_init(server);
+	if (err  == -1) {
+		error_reporter->Report("Failed to Start Server");
+		vTaskDelete(NULL);
+	}
+}
+
+void handle_client(void *args) {
+	int client_socket = (int)args;
+	while(1) {
+		// Read test data and copy them to the model input tensor
+		if (data_provider.Read(client_socket, model_input)) {
+			break;
+		}
+
+		// Run inference on pre-processed data
+		long long start_time = esp_timer_get_time();
+
+		TfLiteStatus invoke_status = interpreter->Invoke();
+		if (invoke_status != kTfLiteOk) {
+			error_reporter->Report("Invoke failed");
+			break;
+		}
+
+		long long inference_time = esp_timer_get_time() - start_time;
+
+		// Interpret raw model predictions
+		auto prediction = prediction_interpreter.GetResult(model_output, 0.0);
+
+		// Send the inference result to the client
+		if (prediction_handler.Update(client_socket, prediction, inference_time)) {
+			break;
+		}
+
+		vTaskDelay(0.5 * pdSECOND);
+	}
+
+	close(client_socket);
+	vTaskDelete(NULL);
+}
+
+void loop(tcp_server_t *server) {
+	const char *TAG = "[tcp_server]";
+	while (1) {
+		int client_socket = tcp_server_accept(server);
+		if (client_socket < 0) {
+			ESP_LOGE(TAG, "Failed to accept client connection");
+			continue;
+		}
+
+		// Handle the client connection in a separate task
+		ESP_LOGI(TAG, "New client connected");
+		xTaskCreate(handle_client, "handle_client", 4096, (void *)client_socket, 5, NULL);
+	}
 }

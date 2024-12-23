@@ -13,16 +13,29 @@ static constexpr int kNumRows = 28;
 static constexpr int kMaxImageSize = kNumCols * kNumRows;
 static float image_buf[kMaxImageSize];
 
-static const char *TAG = "[esp_cli]";
-static const char *host_ip = "192.168.11.56";
-static uint16_t port = 1234;
+static const char *TAG = "[tcp_server]";
 
-int DataProvider::Read(TfLiteTensor* modelInput) {
-	// Get the next image from the server
-	if (next_image(sock, (void*) image_buf, sizeof(image_buf)) < 0) {
-		ESP_LOGE(TAG, "Failed to receive image");
-		close(sock);
-		vTaskDelete(NULL);
+int DataProvider::Read(int client_socket, TfLiteTensor* modelInput) {
+	char request_byte = 0x00;
+
+	// Read the request byte
+	int err = tcp_server_receive(client_socket, &request_byte, 1);
+	if (err < 0) {
+		ESP_LOGE(TAG, "Error occurred during receiving request byte: errno %d", errno);
+		return 1;
+	}
+
+	// Check the request byte
+	if (request_byte != 0x01) {
+		ESP_LOGE(TAG, "Invalid request byte: %d", request_byte);
+		return 1;
+	}
+
+	// Read the image data
+	err = tcp_server_receive(client_socket, (void*) image_buf, sizeof(image_buf));
+	if (err < 0) {
+		ESP_LOGE(TAG, "Error occurred during receiving image: errno %d", errno);
+		return 1;
 	}
 
 	// Copy the data to the model input tensor
@@ -33,15 +46,4 @@ int DataProvider::Read(TfLiteTensor* modelInput) {
 	);
 
 	return 0;
-}
-
-bool DataProvider::Init() {
-	sock = connect_to_server(host_ip, port);
-
-	if (sock  == -1) {
-		ESP_LOGE(TAG, "Failed to Connect");
-		vTaskDelete(NULL);
-	}
-	
-	return true;
 }

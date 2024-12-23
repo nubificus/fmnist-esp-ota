@@ -1,14 +1,9 @@
 #pragma once
 
 #include "tensorflow/lite/c/common.h"
-#include <iterator>
-
-#include "tcp_client.h"
+#include "tcp_server.h"
 
 class DataProvider {
 	public:
-	int sock;
-	
-	bool Init();
-	int Read(TfLiteTensor* modelInput);
+	int Read(int client_socket, TfLiteTensor* modelInput);
 };

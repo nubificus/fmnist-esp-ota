@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.5)
 set(CMAKE_CXX_STANDARD 17)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
+# Set default values for environment variables
 if(DEFINED ENV{FIRMWARE_VERSION})
 	add_compile_definitions(FIRMWARE_VERSION=\"$ENV{FIRMWARE_VERSION}\")
 else()
@@ -37,8 +38,16 @@ else()
 	message(WARNING "WIFI_PASS is not set, using default value")
 endif()
 
+# Conditionally define the STOCK and OTA_SECURE macros
+if(DEFINED ENV{STOCK})
+	add_compile_definitions(STOCK)
+	message("OTA update enabled")
+else()
+	message(WARNING "OTA update disabled")
+endif()
+
 if(DEFINED ENV{OTA_SECURE})
-	add_compile_definitions(OTA_SECURE="1")
+	add_compile_definitions(OTA_SECURE)
 	message("Secure OTA update enabled")
 else()
 	message(WARNING "Secure OTA update disabled")
