@@ -41,9 +41,9 @@ endif()
 # Conditionally define the STOCK and OTA_SECURE macros
 if(DEFINED ENV{STOCK})
 	add_compile_definitions(STOCK)
-	message("OTA update enabled")
+	message("OTA update disabled")
 else()
-	message(WARNING "OTA update disabled")
+	message(WARNING "OTA update enabled")
 endif()
 
 if(DEFINED ENV{OTA_SECURE})

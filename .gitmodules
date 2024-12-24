@@ -7,3 +7,6 @@
 [submodule "components/esp-nn"]
 	path = components/esp-nn
 	url = https://github.com/espressif/esp-nn.git
+[submodule "components/tfmicro"]
+	path = components/tfmicro
+	url = https://github.com/espressif/esp-tflite-micro

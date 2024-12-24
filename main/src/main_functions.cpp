@@ -6,12 +6,15 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "micro_model.h"
-#include "tensorflow/lite/micro/all_ops_resolver.h"
-#include "tensorflow/lite/micro/kernels/micro_ops.h"
-#include "tensorflow/lite/micro/micro_error_reporter.h"
+//#include "tensorflow/lite/micro/all_ops_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
+#include "tensorflow/lite/micro/micro_log.h"
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 #include "tensorflow/lite/schema/schema_generated.h"
+#include "tensorflow/lite/micro/kernels/micro_ops.h"
+#include "tensorflow/lite/micro/tflite_bridge/micro_error_reporter.h"
+#include "tensorflow/lite/micro/micro_interpreter.h"
+#include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 #include "esp_timer.h"
 #include <esp_log.h>
 
@@ -59,13 +62,38 @@ void setup(tcp_server_t *server) {
 		vTaskDelete(NULL);
 	}
 
-	// Load all tflite micro built-in operations
-	static tflite::AllOpsResolver resolver;
+	// load all tflite micro built-in operations
+	// for example layers, activation functions, pooling
+	//static tflite::AllOpsResolver resolver;
+        static tflite::MicroMutableOpResolver<8> micro_op_resolver;
+        if (micro_op_resolver.AddConv2D() != kTfLiteOk) {
+          return;
+        }
+        if (micro_op_resolver.AddMaxPool2D() != kTfLiteOk) {
+          return;
+        }
+        if (micro_op_resolver.AddFullyConnected() != kTfLiteOk) {
+          return;
+        }
+        if (micro_op_resolver.AddSoftmax() != kTfLiteOk) {
+          return;
+        }
+        if (micro_op_resolver.AddReshape() != kTfLiteOk) {
+          return;
+        }
 
-	// Initialize interpreter
+        // Build an interpreter to run the model with.
+        static tflite::MicroInterpreter static_interpreter(
+            model, micro_op_resolver, tensor_arena, kTensorArenaSize);
+        interpreter = &static_interpreter;
+
+
+#if 0
+	// initialize interpreter
 	static tflite::MicroInterpreter static_interpreter(
 		model, resolver, tensor_arena, kTensorArenaSize, error_reporter);
 	interpreter = &static_interpreter;
+#endif
 
 	// Allocate tensor buffers
 	TfLiteStatus allocate_status = interpreter->AllocateTensors();

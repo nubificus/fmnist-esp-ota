@@ -7,7 +7,7 @@
 #include "main_functions.h"
 #include "wifi.h"
 
-#ifdef STOCK
+#ifndef STOCK
 #include "http_server.h"
 
 extern "C" {
@@ -34,7 +34,7 @@ extern "C" void app_main() {
 		return;
 	}
 
-#ifdef STOCK
+#ifndef STOCK
 	ret = akri_server_start();
 	if (ret) {
 		ESP_LOGE(TAG, "Cannot start akri server");

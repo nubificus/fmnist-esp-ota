@@ -9,7 +9,7 @@ set(SOURCES ./src/main.cpp
 
 set(REQUIRES_LIST freertos esp_common tfmicro esp-nn esp_timer)
 
-if(DEFINED ENV{STOCK})
+if(NOT DEFINED ENV{STOCK})
 	list(APPEND REQUIRES_LIST esp32-akri ota-service esp_http_server)
 	list(APPEND SOURCES ./src/http_server.c)
 	message("Adding OTA update dependencies")
