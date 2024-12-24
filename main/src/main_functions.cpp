@@ -65,8 +65,11 @@ void setup(tcp_server_t *server) {
 	// load all tflite micro built-in operations
 	// for example layers, activation functions, pooling
 	//static tflite::AllOpsResolver resolver;
-        static tflite::MicroMutableOpResolver<4> micro_op_resolver;
-        if (micro_op_resolver.AddDepthwiseConv2D() != kTfLiteOk) {
+        static tflite::MicroMutableOpResolver<8> micro_op_resolver;
+        if (micro_op_resolver.AddConv2D() != kTfLiteOk) {
+          return;
+        }
+        if (micro_op_resolver.AddMaxPool2D() != kTfLiteOk) {
           return;
         }
         if (micro_op_resolver.AddFullyConnected() != kTfLiteOk) {
