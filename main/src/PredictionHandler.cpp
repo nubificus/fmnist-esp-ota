@@ -10,16 +10,16 @@
 static const char *TAG = "[tcp_server]";
 
 int PredictionHandler::Update(int client_socket, const std::vector<float>& predictions, long long inference_time) {
-	int bytes_to_send = predictions.size() * sizeof(float);
-	int bytes_sent = tcp_server_send(client_socket, (void*) predictions.data(), bytes_to_send);	
+	int err;
 	
-	if (bytes_sent != bytes_to_send) {
+	err = tcp_server_send(client_socket, (void*) predictions.data(), predictions.size() * sizeof(float));
+	if (err < 0) {
 		ESP_LOGE(TAG, "Failed to send inference result to client");
 		return 1;
 	}
 
-	bytes_sent = tcp_server_send(client_socket, (void*) &inference_time, sizeof(inference_time));
-	if (bytes_sent !=  sizeof(inference_time)) {
+	err = tcp_server_send(client_socket, (void*) &inference_time, sizeof(inference_time));
+	if (err < 0) {
 		ESP_LOGE(TAG, "Failed to send inference time to client");
 		return 1;
 	}

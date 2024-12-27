@@ -50,7 +50,6 @@ def main():
 	log_file = open("results.txt", "w")
 	original_stdout = sys.stdout
 	sys.stdout = log_file
-	creating_log = True
 
 	try:
 		while True:
@@ -78,19 +77,19 @@ def main():
 
 			image_index = (image_index + 1) % image_count
 
-			if image_index == 0 and creating_log:
-				creating_log = False
-				sys.stdout = original_stdout
+			if image_index == 0 and not log_file.closed:
 				print("All images have been sent, switch back to stdout")
+				sys.stdout = original_stdout
 				log_file.close()
 
 	except Exception as e:
 		print(f"Exception: {e}")
 	finally:
+		print("Closing the client socket")
 		client_socket.close()
 		if not log_file.closed:
 			log_file.close()
 		sys.stdout = original_stdout
 
 if __name__ == "__main__":
-    main()
+	main()

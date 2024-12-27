@@ -6,15 +6,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "micro_model.h"
-//#include "tensorflow/lite/micro/all_ops_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/micro/micro_log.h"
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow/lite/micro/kernels/micro_ops.h"
 #include "tensorflow/lite/micro/tflite_bridge/micro_error_reporter.h"
-#include "tensorflow/lite/micro/micro_interpreter.h"
-#include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 #include "esp_timer.h"
 #include <esp_log.h>
 
@@ -64,36 +61,32 @@ void setup(tcp_server_t *server) {
 
 	// load all tflite micro built-in operations
 	// for example layers, activation functions, pooling
-	//static tflite::AllOpsResolver resolver;
-        static tflite::MicroMutableOpResolver<8> micro_op_resolver;
-        if (micro_op_resolver.AddConv2D() != kTfLiteOk) {
-          return;
-        }
-        if (micro_op_resolver.AddMaxPool2D() != kTfLiteOk) {
-          return;
-        }
-        if (micro_op_resolver.AddFullyConnected() != kTfLiteOk) {
-          return;
-        }
-        if (micro_op_resolver.AddSoftmax() != kTfLiteOk) {
-          return;
-        }
-        if (micro_op_resolver.AddReshape() != kTfLiteOk) {
-          return;
-        }
+	static tflite::MicroMutableOpResolver<5> micro_op_resolver;
+	if (micro_op_resolver.AddConv2D() != kTfLiteOk) {
+		error_reporter->Report("AddConv2D failed");
+		vTaskDelete(NULL);
+	}
+	if (micro_op_resolver.AddMaxPool2D() != kTfLiteOk) {
+		error_reporter->Report("AddMaxPool2D failed");
+		vTaskDelete(NULL);
+	}
+	if (micro_op_resolver.AddFullyConnected() != kTfLiteOk) {
+		error_reporter->Report("AddFullyConnected failed");
+		vTaskDelete(NULL);
+	}
+	if (micro_op_resolver.AddSoftmax() != kTfLiteOk) {
+		error_reporter->Report("AddSoftmax failed");
+		vTaskDelete(NULL);
+	}
+	if (micro_op_resolver.AddReshape() != kTfLiteOk) {
+		error_reporter->Report("AddReshape failed");
+		vTaskDelete(NULL);
+	}
 
-        // Build an interpreter to run the model with.
-        static tflite::MicroInterpreter static_interpreter(
-            model, micro_op_resolver, tensor_arena, kTensorArenaSize);
-        interpreter = &static_interpreter;
-
-
-#if 0
-	// initialize interpreter
+	// Build an interpreter to run the model with.
 	static tflite::MicroInterpreter static_interpreter(
-		model, resolver, tensor_arena, kTensorArenaSize, error_reporter);
+		model, micro_op_resolver, tensor_arena, kTensorArenaSize);
 	interpreter = &static_interpreter;
-#endif
 
 	// Allocate tensor buffers
 	TfLiteStatus allocate_status = interpreter->AllocateTensors();
@@ -105,15 +98,6 @@ void setup(tcp_server_t *server) {
 	// Get pointers to the input and output tensors
 	model_input = interpreter->input(0);
 	model_output = interpreter->output(0);
-
-	// Check the model's input dimensions
-	if ((model_input->dims->size != 4 || (model_input->dims->data[0] != 1) ||
-		(model_input->dims->data[1] != 28) ||
-		(model_input->dims->data[2] != 28) || (model_input->dims->data[3] != 1) ||
-		(model_input->type != kTfLiteFloat32))) {
-		error_reporter->Report("Unexpected input tensor parameters in model");
-		vTaskDelete(NULL);
-	}
 
 	// Initialize the ESP32 server
 	int err = tcp_server_init(server);
@@ -160,6 +144,7 @@ void handle_client(void *args) {
 void loop(tcp_server_t *server) {
 	const char *TAG = "[tcp_server]";
 	while (1) {
+		ESP_LOGI(TAG, "Waiting for client connection...");
 		int client_socket = tcp_server_accept(server);
 		if (client_socket < 0) {
 			ESP_LOGE(TAG, "Failed to accept client connection");

@@ -4,7 +4,6 @@
 #include <string>
 #include <utility>
 
-// #include "tcp_client.h"
 #include "tcp_server.h"
 
 class PredictionHandler {
