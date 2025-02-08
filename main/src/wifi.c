@@ -47,21 +47,6 @@ static void ip_event_handler(void* arg, esp_event_base_t event_base,
 	}
 }
 
-// esp_err_t connect_wifi(const char* ssid, const char* passwd) {
-	// wifi_config_t wifi_config = {
-	// 	.sta = {
-	// 		.ssid = "",
-	// 		.password = "",
-	// 		.threshold.authmode = WIFI_AUTH_WPA2_PSK,
-	// 		.pmf_cfg = {
-	// 			.capable = true,
-	// 			.required = false
-	// 		},
-	// 	},
-	// };
-	
-	// strncpy((char*) wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
-    // 	strncpy((char*) wifi_config.sta.password, passwd, sizeof(wifi_config.sta.password) - 1);
 esp_err_t connect_wifi() {
 	int status = WIFI_FAILURE;
 

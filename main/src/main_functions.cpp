@@ -44,12 +44,27 @@ namespace {
 	PredictionHandler prediction_handler;
 }
 
+void PerformWarmup(int warmup_runs) {
+	// Fill input tensor with dummy data (ones)
+	memset(model_input->data.raw, 1, model_input->bytes);
+	
+	for (int i = 0; i < warmup_runs; i++) {
+		if (interpreter->Invoke() != kTfLiteOk) {
+			error_reporter->Report("Warmup inference failed on iteration %d", i + 1);
+			return;
+		}
+		vTaskDelay(0.5 * pdSECOND);
+	}
+	ESP_LOGI("[setup]", "Completed %d warmup runs.", warmup_runs);
+}
+
+
 void setup(tcp_server_t *server) {
 	static tflite::MicroErrorReporter micro_error_reporter;
 	error_reporter = &micro_error_reporter;
 
 	// Import the trained weights from the C array
-	model = tflite::GetModel(fmnist_frozen_micro_model_cc_data);
+	model = tflite::GetModel(micro_model_cc_data);
 
 	// Check if the model is compatible with the TensorFlow Lite interpreter
 	if (model->version() != TFLITE_SCHEMA_VERSION) {
@@ -77,11 +92,23 @@ void setup(tcp_server_t *server) {
 	if (micro_op_resolver.AddSoftmax() != kTfLiteOk) {
 		error_reporter->Report("AddSoftmax failed");
 		vTaskDelete(NULL);
-	}
+	}//
 	if (micro_op_resolver.AddReshape() != kTfLiteOk) {
 		error_reporter->Report("AddReshape failed");
 		vTaskDelete(NULL);
 	}
+	// if (micro_op_resolver.AddMean() != kTfLiteOk) {
+	// 	error_reporter->Report("AddMean failed");
+	// 	vTaskDelete(NULL);
+	// }
+	// if (micro_op_resolver.AddAdd() != kTfLiteOk) {
+	// 	error_reporter->Report("AddAdd failed");
+	// 	vTaskDelete(NULL);
+	// }
+	// if (micro_op_resolver.AddMul() != kTfLiteOk) {
+	// 	error_reporter->Report("AddMul failed");
+	// 	vTaskDelete(NULL);
+	// }
 
 	// Build an interpreter to run the model with.
 	static tflite::MicroInterpreter static_interpreter(
@@ -98,6 +125,11 @@ void setup(tcp_server_t *server) {
 	// Get pointers to the input and output tensors
 	model_input = interpreter->input(0);
 	model_output = interpreter->output(0);
+
+	// Perform warmup runs before measuring inference time
+	ESP_LOGI("[setup]", "Performing warmup runs...");
+	int warmup_runs = 10;
+	PerformWarmup(warmup_runs);
 
 	// Initialize the ESP32 server
 	int err = tcp_server_init(server);
