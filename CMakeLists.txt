@@ -54,4 +54,4 @@ else()
 endif()
 
 set(PROJECT_NAME "esp_$ENV{APPLICATION_TYPE}_ota")
-project(${PROJECT_NAME})
+project(fmnist-ota)
