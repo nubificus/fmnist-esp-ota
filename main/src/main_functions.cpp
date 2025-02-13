@@ -35,7 +35,7 @@ namespace {
 	// Create an area of memory to use for input, output, and intermediate arrays.
 	// the size of this will depend on the model you're using, and may need to be
 	// determined by experimentation.
-	constexpr int kTensorArenaSize = 32 * 1024;
+	constexpr int kTensorArenaSize = 152 * 1024;
 	alignas(16) uint8_t tensor_arena[kTensorArenaSize];
 
 	// Processing pipeline
@@ -76,7 +76,7 @@ void setup(tcp_server_t *server) {
 
 	// load all tflite micro built-in operations
 	// for example layers, activation functions, pooling
-	static tflite::MicroMutableOpResolver<5> micro_op_resolver;
+	static tflite::MicroMutableOpResolver<7> micro_op_resolver;
 	if (micro_op_resolver.AddConv2D() != kTfLiteOk) {
 		error_reporter->Report("AddConv2D failed");
 		vTaskDelete(NULL);
@@ -93,22 +93,24 @@ void setup(tcp_server_t *server) {
 		error_reporter->Report("AddSoftmax failed");
 		vTaskDelete(NULL);
 	}//
+#if 0
 	if (micro_op_resolver.AddReshape() != kTfLiteOk) {
 		error_reporter->Report("AddReshape failed");
 		vTaskDelete(NULL);
 	}
-	// if (micro_op_resolver.AddMean() != kTfLiteOk) {
-	// 	error_reporter->Report("AddMean failed");
-	// 	vTaskDelete(NULL);
-	// }
-	// if (micro_op_resolver.AddAdd() != kTfLiteOk) {
-	// 	error_reporter->Report("AddAdd failed");
-	// 	vTaskDelete(NULL);
-	// }
-	// if (micro_op_resolver.AddMul() != kTfLiteOk) {
-	// 	error_reporter->Report("AddMul failed");
-	// 	vTaskDelete(NULL);
-	// }
+#endif
+	if (micro_op_resolver.AddMean() != kTfLiteOk) {
+	 	error_reporter->Report("AddMean failed");
+	 	vTaskDelete(NULL);
+	}
+	if (micro_op_resolver.AddAdd() != kTfLiteOk) {
+		error_reporter->Report("AddAdd failed");
+	 	vTaskDelete(NULL);
+	}
+	if (micro_op_resolver.AddMul() != kTfLiteOk) {
+	 	error_reporter->Report("AddMul failed");
+	 	vTaskDelete(NULL);
+	}
 
 	// Build an interpreter to run the model with.
 	static tflite::MicroInterpreter static_interpreter(
