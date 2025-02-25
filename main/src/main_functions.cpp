@@ -3,17 +3,34 @@
 #include "DataProvider.h"
 #include "PredictionHandler.h"
 #include "PredictionInterpreter.h"
+
+#ifdef INTERNAL_MEMORY_USAGE
+#include "micro_model.h"
+#endif
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "micro_model.h"
+
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/micro/micro_log.h"
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow/lite/micro/kernels/micro_ops.h"
 #include "tensorflow/lite/micro/tflite_bridge/micro_error_reporter.h"
+
 #include "esp_timer.h"
-#include <esp_log.h>
+#include "esp_log.h"
+#include "esp_task_wdt.h"
+
+#include "esp_heap_caps.h"
+
+#ifndef INTERNAL_MEMORY_USAGE 
+#include "esp_psram.h"
+#endif
+
+#ifdef LOAD_MODEL_FROM_PARTITION
+#include "esp_partition.h"
+#endif
 
 #include "tcp_server.h"
 
@@ -35,8 +52,8 @@ namespace {
 	// Create an area of memory to use for input, output, and intermediate arrays.
 	// the size of this will depend on the model you're using, and may need to be
 	// determined by experimentation.
-	constexpr int kTensorArenaSize = 152 * 1024;
-	alignas(16) uint8_t tensor_arena[kTensorArenaSize];
+	constexpr int kTensorArenaSize = (TENSOR_ALLOCATION_SPACE);
+	uint8_t *tensor_arena = nullptr;
 
 	// Processing pipeline
 	DataProvider data_provider;
@@ -45,6 +62,15 @@ namespace {
 }
 
 void PerformWarmup(int warmup_runs) {
+	// Increase watchdog timeout to 20 seconds
+	esp_task_wdt_config_t config = {
+		.timeout_ms = 20000,  // Set timeout to 20 sec
+		.idle_core_mask = (1 << 0) | (1 << 1),  // Apply to both cores
+		.trigger_panic = false  // Don't trigger panic, just log warning
+	};
+
+	esp_task_wdt_reconfigure(&config);
+
 	// Fill input tensor with dummy data (ones)
 	memset(model_input->data.raw, 1, model_input->bytes);
 	
@@ -53,18 +79,111 @@ void PerformWarmup(int warmup_runs) {
 			error_reporter->Report("Warmup inference failed on iteration %d", i + 1);
 			return;
 		}
+
 		vTaskDelay(0.5 * pdSECOND);
 	}
 	ESP_LOGI("[setup]", "Completed %d warmup runs.", warmup_runs);
+
+	// Restore watchdog timeout to default (5 sec)
+	config.timeout_ms = 5000,  // Restore timeout to 5 sec
+	esp_task_wdt_reconfigure(&config);
 }
 
+void allocate_tensor_arena() {
+#ifdef INTERNAL_MEMORY_USAGE
+	// Allocate tensor arena in internal RAM
+	tensor_arena = (uint8_t *) heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_INTERNAL);
+	if (tensor_arena) {
+		ESP_LOGI("allocate_tensor_arena", "Tensor arena allocated in internal RAM (%d bytes)", kTensorArenaSize);
+	} else {
+		ESP_LOGE("allocate_tensor_arena", "Failed to allocate tensor arena in internal RAM!");
+		vTaskDelete(NULL);
+	}
+#else
+	// Allocate tensor arena in external PSRAM
+	if (esp_psram_is_initialized()) {
+		ESP_LOGI("allocate_tensor_arena", "PSRAM is available! Total size: %d bytes", esp_psram_get_size());
+		
+		tensor_arena = (uint8_t *) heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_SPIRAM);
+		if (tensor_arena) {
+			ESP_LOGI("allocate_tensor_arena", "Tensor arena allocated in PSRAM (%d bytes)", kTensorArenaSize);
+		} else {
+			ESP_LOGE("allocate_tensor_arena", "Failed to allocate tensor arena in PSRAM!");
+			vTaskDelete(NULL);
+		}
+	} else { // PSRAM is not available -> Try internal RAM
+		ESP_LOGW("allocate_tensor_arena", "PSRAM is NOT available! Trying internal RAM.");
+		
+		tensor_arena = (uint8_t *) heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_INTERNAL);
+		if (tensor_arena) {
+			ESP_LOGI("allocate_tensor_arena", "Tensor arena allocated in internal RAM (%d bytes)", kTensorArenaSize);
+		} else {
+			ESP_LOGE("allocate_tensor_arena", "Failed to allocate tensor arena in internal RAM!");
+			vTaskDelete(NULL);
+		}
+	}
+#endif
+	vTaskDelay(0.5 * pdSECOND);
+}
+
+#ifdef LOAD_MODEL_FROM_PARTITION
+const tflite::Model* load_model_from_partition() {
+	// Find the partition that contains the model
+	const esp_partition_t* partition = esp_partition_find_first(
+		ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "tflite_model");
+
+	if (!partition) {
+		ESP_LOGE("load_model_from_partition", "Model partition not found!");
+		return nullptr;
+	}
+
+	const void* model_data;
+	esp_partition_mmap_handle_t mmap_handle;
+	
+	// Start from the beginning of the partition
+	size_t offset = 0;
+	// The model size is an environment variable set by the user
+	size_t model_size = (TFLITE_MODEL_SIZE);
+
+	// Map the model partition to memory
+	esp_err_t err = esp_partition_mmap(
+						partition,
+						offset,
+						model_size,
+						ESP_PARTITION_MMAP_DATA,
+						&model_data,
+						&mmap_handle
+					);
+
+	if (err != ESP_OK) {
+		ESP_LOGE("load_model_from_partition", "Failed to map model partition!");
+		return nullptr;
+	}
+
+	ESP_LOGI("load_model_from_partition", "Model successfully mapped from flash");
+	return tflite::GetModel(model_data);
+}
+#endif
 
 void setup(tcp_server_t *server) {
 	static tflite::MicroErrorReporter micro_error_reporter;
 	error_reporter = &micro_error_reporter;
+	
+	// Allocate memory for the tensor arena
+	allocate_tensor_arena();
 
-	// Import the trained weights from the C array
+	// Load the tflite model
+#ifdef LOAD_MODEL_FROM_PARTITION
+	model = load_model_from_partition();
+#else
 	model = tflite::GetModel(micro_model_cc_data);
+#endif
+
+	// Check if the model is loaded
+	if (!model) {
+		error_reporter->Report("Failed to load tflite model");
+		vTaskDelete(NULL);
+	}
 
 	// Check if the model is compatible with the TensorFlow Lite interpreter
 	if (model->version() != TFLITE_SCHEMA_VERSION) {
@@ -77,14 +196,8 @@ void setup(tcp_server_t *server) {
 	// load all tflite micro built-in operations
 	// for example layers, activation functions, pooling
 	static tflite::MicroMutableOpResolver<7> micro_op_resolver;
-	if (micro_op_resolver.AddConv2D() != kTfLiteOk) {
-		error_reporter->Report("AddConv2D failed");
-		vTaskDelete(NULL);
-	}
-	if (micro_op_resolver.AddMaxPool2D() != kTfLiteOk) {
-		error_reporter->Report("AddMaxPool2D failed");
-		vTaskDelete(NULL);
-	}
+
+	// mobilenet
 	if (micro_op_resolver.AddFullyConnected() != kTfLiteOk) {
 		error_reporter->Report("AddFullyConnected failed");
 		vTaskDelete(NULL);
@@ -92,24 +205,26 @@ void setup(tcp_server_t *server) {
 	if (micro_op_resolver.AddSoftmax() != kTfLiteOk) {
 		error_reporter->Report("AddSoftmax failed");
 		vTaskDelete(NULL);
-	}//
-#if 0
-	if (micro_op_resolver.AddReshape() != kTfLiteOk) {
-		error_reporter->Report("AddReshape failed");
+	}
+	if (micro_op_resolver.AddMean() != kTfLiteOk) {
+		error_reporter->Report("AddMean failed");
 		vTaskDelete(NULL);
 	}
-#endif
-	if (micro_op_resolver.AddMean() != kTfLiteOk) {
-	 	error_reporter->Report("AddMean failed");
-	 	vTaskDelete(NULL);
+	if (micro_op_resolver.AddConv2D() != kTfLiteOk) {
+		error_reporter->Report("AddConv2D failed");
+		vTaskDelete(NULL);
 	}
-	if (micro_op_resolver.AddAdd() != kTfLiteOk) {
-		error_reporter->Report("AddAdd failed");
-	 	vTaskDelete(NULL);
+	if (micro_op_resolver.AddDepthwiseConv2D() != kTfLiteOk) {
+		error_reporter->Report("AddDepthwiseConv2D failed");
+		vTaskDelete(NULL);
 	}
-	if (micro_op_resolver.AddMul() != kTfLiteOk) {
-	 	error_reporter->Report("AddMul failed");
-	 	vTaskDelete(NULL);
+	if (micro_op_resolver.AddDequantize() != kTfLiteOk) {
+		error_reporter->Report("AddDequantize failed");
+		vTaskDelete(NULL);
+	}
+	if (micro_op_resolver.AddQuantize() != kTfLiteOk) {
+		error_reporter->Report("AddQuantize failed");
+		vTaskDelete(NULL);
 	}
 
 	// Build an interpreter to run the model with.
@@ -124,12 +239,15 @@ void setup(tcp_server_t *server) {
 		vTaskDelete(NULL);
 	}
 
+	// Show the memory usage of the model
+	ESP_LOGI("setup", "Used tensor arena: %d bytes", interpreter->arena_used_bytes());
+
 	// Get pointers to the input and output tensors
 	model_input = interpreter->input(0);
 	model_output = interpreter->output(0);
 
 	// Perform warmup runs before measuring inference time
-	ESP_LOGI("[setup]", "Performing warmup runs...");
+	ESP_LOGI("setup", "Performing warmup runs...");
 	int warmup_runs = 10;
 	PerformWarmup(warmup_runs);
 
@@ -143,6 +261,16 @@ void setup(tcp_server_t *server) {
 
 void handle_client(void *args) {
 	int client_socket = (int)args;
+
+	// Increase watchdog timeout to 20 seconds
+	esp_task_wdt_config_t config = {
+		.timeout_ms = 20000,  // Set timeout to 20 sec
+		.idle_core_mask = (1 << 0) | (1 << 1),  // Apply to both cores
+		.trigger_panic = false  // Don't trigger panic, just log warning
+	};
+
+	esp_task_wdt_reconfigure(&config);
+
 	while(1) {
 		// Read test data and copy them to the model input tensor
 		if (data_provider.Read(client_socket, model_input)) {
@@ -171,12 +299,16 @@ void handle_client(void *args) {
 		vTaskDelay(0.5 * pdSECOND);
 	}
 
+	// Restore watchdog timeout to default (5 sec)
+	config.timeout_ms = 5000,  // Restore timeout to 5 sec
+	esp_task_wdt_reconfigure(&config);
+ 
 	close(client_socket);
 	vTaskDelete(NULL);
 }
 
 void loop(tcp_server_t *server) {
-	const char *TAG = "[tcp_server]";
+	const char *TAG = "tcp_server";
 	while (1) {
 		ESP_LOGI(TAG, "Waiting for client connection...");
 		int client_socket = tcp_server_accept(server);

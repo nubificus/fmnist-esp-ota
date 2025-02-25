@@ -8,10 +8,6 @@ dependencies.lock
 .clang-format
 .clang-tidy
 
-# Data and trained models
-model_creation/data/*
-model_creation/models/*
-
 # ESP-IDF
 sdkconfig
 sdkconfig.old
