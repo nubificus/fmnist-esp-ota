@@ -4,7 +4,7 @@
 #include "PredictionHandler.h"
 #include "PredictionInterpreter.h"
 
-#ifdef INTERNAL_MEMORY_USAGE
+#ifndef LOAD_MODEL_FROM_PARTITION
 #include "micro_model.h"
 #endif
 

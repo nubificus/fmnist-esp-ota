@@ -85,4 +85,4 @@ else()
 	message(WARNING "Secure OTA update disabled")
 endif()
 
-project("esp_tflite_app")
+project(esp_tflite_app)

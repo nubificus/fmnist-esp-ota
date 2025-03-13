@@ -28,8 +28,11 @@ __pycache__/
 # C extensions
 *.so
 
+# Pem files
+*.pem
+
 # Distribution / packaging
-build
+build*
 .Python
 develop-eggs/
 dist/
