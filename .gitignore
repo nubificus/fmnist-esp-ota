@@ -2,15 +2,12 @@
 compile_commands.json
 
 /scripts/set_env_vars.sh
+/scripts/micro_ops.json
 results.txt
 dependencies.lock
 
 .clang-format
 .clang-tidy
-
-# Data and trained models
-model_creation/data/*
-model_creation/models/*
 
 # ESP-IDF
 sdkconfig
@@ -32,8 +29,11 @@ __pycache__/
 # C extensions
 *.so
 
+# Pem files
+*.pem
+
 # Distribution / packaging
-build
+build*
 .Python
 develop-eggs/
 dist/
