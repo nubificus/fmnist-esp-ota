@@ -9,8 +9,13 @@
 tflite::MicroMutableOpResolver<7>* get_micro_op_resolver(tflite::ErrorReporter* error_reporter) {
     auto* resolver = new tflite::MicroMutableOpResolver<7>();
 
-    if (resolver->AddFullyConnected() != kTfLiteOk) {
-        error_reporter->Report("AddFullyConnected failed");
+    if (resolver->AddConv2D() != kTfLiteOk) {
+        error_reporter->Report("AddConv2D failed");
+        vTaskDelete(NULL);
+    }
+
+    if (resolver->AddQuantize() != kTfLiteOk) {
+        error_reporter->Report("AddQuantize failed");
         vTaskDelete(NULL);
     }
 
@@ -24,18 +29,13 @@ tflite::MicroMutableOpResolver<7>* get_micro_op_resolver(tflite::ErrorReporter* 
         vTaskDelete(NULL);
     }
 
-    if (resolver->AddConv2D() != kTfLiteOk) {
-        error_reporter->Report("AddConv2D failed");
+    if (resolver->AddFullyConnected() != kTfLiteOk) {
+        error_reporter->Report("AddFullyConnected failed");
         vTaskDelete(NULL);
     }
 
     if (resolver->AddDequantize() != kTfLiteOk) {
         error_reporter->Report("AddDequantize failed");
-        vTaskDelete(NULL);
-    }
-
-    if (resolver->AddQuantize() != kTfLiteOk) {
-        error_reporter->Report("AddQuantize failed");
         vTaskDelete(NULL);
     }
 

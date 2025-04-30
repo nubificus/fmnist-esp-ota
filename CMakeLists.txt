@@ -80,9 +80,23 @@ endif()
 
 if(DEFINED ENV{INTERNAL_MEMORY_USAGE})
 	add_compile_definitions(INTERNAL_MEMORY_USAGE)
-	message("Using internal RAM for model")
-else()
-	message(WARNING "Using external PSRAM for model")
+	message("Using internal RAM configuration")
+	execute_process(
+		COMMAND bash -c "cp ${CMAKE_SOURCE_DIR}/sdkconfig.defaults.internal ${CMAKE_SOURCE_DIR}/sdkconfig.defaults"
+		RESULT_VARIABLE COPY_RESULT
+	)
+	if(NOT COPY_RESULT EQUAL 0)
+		message(FATAL_ERROR "Failed to copy sdkconfig.defaults.internal to sdkconfig.defaults")
+	endif()
+else() # Enable external PSRAM
+	message("Using PSRAM configuration")
+	execute_process(
+		COMMAND bash -c "cp ${CMAKE_SOURCE_DIR}/sdkconfig.defaults.psram ${CMAKE_SOURCE_DIR}/sdkconfig.defaults"
+		RESULT_VARIABLE COPY_RESULT
+	)
+	if(NOT COPY_RESULT EQUAL 0)
+		message(FATAL_ERROR "Failed to copy sdkconfig.defaults.psram to sdkconfig.defaults")
+	endif()
 endif()
 
 if(DEFINED ENV{WIFI_SSID})
