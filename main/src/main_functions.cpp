@@ -8,12 +8,13 @@
 #include "micro_model.h"
 #endif
 
+#include "micro_ops.h"
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/micro/micro_log.h"
-#include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow/lite/micro/kernels/micro_ops.h"
 #include "tensorflow/lite/micro/tflite_bridge/micro_error_reporter.h"
@@ -193,43 +194,12 @@ void setup(tcp_server_t *server) {
 		vTaskDelete(NULL);
 	}
 
-	// load all tflite micro built-in operations
-	// for example layers, activation functions, pooling
-	static tflite::MicroMutableOpResolver<7> micro_op_resolver;
-
-	// mobilenet
-	if (micro_op_resolver.AddFullyConnected() != kTfLiteOk) {
-		error_reporter->Report("AddFullyConnected failed");
-		vTaskDelete(NULL);
-	}
-	if (micro_op_resolver.AddSoftmax() != kTfLiteOk) {
-		error_reporter->Report("AddSoftmax failed");
-		vTaskDelete(NULL);
-	}
-	if (micro_op_resolver.AddMean() != kTfLiteOk) {
-		error_reporter->Report("AddMean failed");
-		vTaskDelete(NULL);
-	}
-	if (micro_op_resolver.AddConv2D() != kTfLiteOk) {
-		error_reporter->Report("AddConv2D failed");
-		vTaskDelete(NULL);
-	}
-	if (micro_op_resolver.AddDepthwiseConv2D() != kTfLiteOk) {
-		error_reporter->Report("AddDepthwiseConv2D failed");
-		vTaskDelete(NULL);
-	}
-	if (micro_op_resolver.AddDequantize() != kTfLiteOk) {
-		error_reporter->Report("AddDequantize failed");
-		vTaskDelete(NULL);
-	}
-	if (micro_op_resolver.AddQuantize() != kTfLiteOk) {
-		error_reporter->Report("AddQuantize failed");
-		vTaskDelete(NULL);
-	}
+	// Get micro op resolver generated for this model
+	auto* micro_op_resolver = get_micro_op_resolver(error_reporter);
 
 	// Build an interpreter to run the model with.
 	static tflite::MicroInterpreter static_interpreter(
-		model, micro_op_resolver, tensor_arena, kTensorArenaSize);
+		model, *micro_op_resolver, tensor_arena, kTensorArenaSize);
 	interpreter = &static_interpreter;
 
 	// Allocate tensor buffers

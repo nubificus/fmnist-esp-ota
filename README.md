@@ -4,7 +4,6 @@
 
 1. [Introduction](#introduction)
 2. [Build and Deploy](#build-and-deploy)
-3. [Input Data TCP Client](#input-data-tcp-client)
 ---
 
 ## Introduction
@@ -19,7 +18,6 @@ the memory and has a single input and a single output tensor.
 	``` bash
 	git clone --recursive  https://github.com/nubificus/fmnist-esp-ota.git
 	cd fmnist-esp-ota
-	git checkout feat_psram
 	```
 
 2. Define the environment variables necessary for the project. These are the following:
@@ -27,7 +25,8 @@ the memory and has a single input and a single output tensor.
 	* **FIRMWARE_VERSION**: the version of that app used to distinguish it from others.
 	* **DEVICE_TYPE**: the type of esp32 device that this project will be compiled for (it should be the same as the one used in `idf.py set-target`).
 	* **APPLICATION_TYPE**: the kind of application that will be compiled. In our case it should be named after the tflite model type used.
-	* **TFLITE_MODEL_SIZE**: used when the model is loaded from a partition to define the size in bytes of the .tflite model file.
+	* **MODEL_FILE**: this is the path to the tflite model of choice
+	* **PORT**: the port to which the esp32 device is connected
 	* **TENSOR_ALLOCATION_SPACE**: the size of space that should be allocated (in internal RAM / external PSRAM) for storing the model's tensors.
 	* **LOAD_MODEL_FROM_PARTITION**: defined when the tflite model should be read from a flash partition. Otherwise, the model is extracted from a C array found in the `micro_model.cpp` file.
 	* **INTERNAL_MEMORY_USAGE**: defined when the space for the tensors should be allocated from the internal RAM. Otherwise, the larger but slower external PSRAM is used.
@@ -39,16 +38,11 @@ the memory and has a single input and a single output tensor.
 	Assuming we aim to deploy the custom *mobilenet* tflite model inside the `models` directory from a flash partition by using the external PSRAM for tensor allocation and enabling non-secure OTA update support, we should do the following:
 
 	```bash
-	stat -c%s models/mobilenet_frozen_quantized_int8.tflite
-	```
-	This should give the size of the tflite file in bytes (i.e. **1181664** bytes for this mobilenet)
-
-	```bash
 	export FIRMWARE_VERSION="0.1.0"
 	export DEVICE_TYPE="esp32s3"
 	export APPLICATION_TYPE="mobilenet"
-	# The size extracted previously
-	export TFLITE_MODEL_SIZE=1181664
+	export MODEL_FILE="models/mobilenet_frozen_quantized_int8.tflite"
+	export PORT="dev/ttyUSB2"
 	# This is found by trial and error(e.g. mobilenet needs about 302KB)
 	export TENSOR_ALLOCATION_SPACE=$((400 * 1024))
 	# The tflite model should be expected in a certain partition
@@ -57,20 +51,7 @@ the memory and has a single input and a single output tensor.
 	export WIFI_PASS=<wifi_pass>
 	```
 
-3. When **LOAD_MODEL_FROM_PARTITION** is **not defined**, you need to produce a .cpp file from the model's .tflite file and copy it onto the `main/src/micro_model.cpp` file. Therefore, do:
-	```bash
-	xxd -i models/<micro_model>.tflite > main/src/micro_model.cpp
-	```
-	Then, edit the .cpp file to ensure its form is:
-	```cpp
-	#include "micro_model.h"
-	const unsigned char micro_model_cc_data[] = {\*Binary data*\}
-	const unsigned int micro_model_cc_data_len
-	```
-
-	Note that the *tflite_model* partition in the `partitions.csv` file can be removed when loading the model from `main/src/micro_model.cpp` since it would otherwise become unused space.
-
-4. Finally set the target device, build and flash the project
+3. Set the target device, build and flash the project
 
 	```bash
 	mkdir build
@@ -79,25 +60,12 @@ the memory and has a single input and a single output tensor.
 	idf.py --port <PORT> flash
 	```
 
-5. In case **LOAD_MODEL_FROM_PARTITION** is **defined**, ensure the tflite model is written in the appropriate *tflite_model* partition which is defined in the following `partitions.csv` file:
+	During the building process, the `scripts/esp32_model_deploy_helper.py` script is called which essentially does all the model-specific configurations in order for our tflite deployment app to work. It does the following:
+	* Checks if you have exported the **LOAD_MODEL_FROM_PARTITION** variable and creates the `scripts/env.sh` script which defines the **TFLITE_MODEL_SIZE** variable. In that case, it also extends the `tflite_model` partition in the `partitions.csv` file if necessary and writes the model on the esp32 device's flash memory using the esptool.
+	* If **LOAD_MODEL_FROM_PARTITION** is not set, then the python script creates the `src/micro_model.cpp` so that the building process can bind the model into the final executable.
+	* It finds the micro operations used by the model and creates the `main/inc/micro_ops.h` and `main/src/micro_ops.cpp` which define the `get_micro_op_resolver()` function that is needed by the `setup()` function.
 
-	```
-	# Name,       Type, SubType, Offset,   Size,    Flags
-	nvs,          data, nvs,     0x11000,  0x6000,
-	phy_init,     data, phy,     0x17000,  0x1000,
-	factory,      app,  factory, 0x20000,  0x180000,
-	ota_0,        app,  ota_0,   0x1A0000, 0x180000,
-	ota_1,        app,  ota_1,   0x320000, 0x180000,
-	otadata,      data, ota,     0x4A0000, 0x2000,
-	tflite_model, data, spiffs,  0x4A2000, 0x180000,
-	```
-	That can be done with the command:
-
-	```bash
-	esptool.py --port /dev/ttyUSB2 write_flash 0x4A2000 models/mobilenet_frozen_quantized_int8.tflite
-	```
-
-6. Last but not least, run the application with `idf.py --port <PORT> monitor` and the logging should be similar to the following:
+4. Finally, run the application with `idf.py --port <PORT> monitor` and the logging should be similar to the following:
 	```bash
 	I (2150) wifi: STA IP: 192.168.11.57
 	I (2150) wifi: Connected to ap
@@ -126,5 +94,3 @@ idf.py --port <PORT> flash monitor
 ```
 
 If you want to change an environment variable controlling the project, ideally you should do `idf.py fullclean` and then rebuild the project.
-
-## Input Data TCP Client

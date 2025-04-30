@@ -4,7 +4,8 @@ set(SOURCES ./src/main.cpp
 			./src/PredictionInterpreter.cpp
 			./src/PredictionHandler.cpp
 			./src/wifi.c
-			./src/tcp_server.c)
+			./src/tcp_server.c
+			./src/micro_ops.cpp)
 
 set(REQUIRES_LIST freertos esp_common tfmicro esp-nn esp_timer)
 
