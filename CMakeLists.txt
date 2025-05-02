@@ -12,16 +12,25 @@ endif()
 # 	set(PORT "/dev/ttyUSB2")
 # 	message(WARNING "PORT is not set, using default: ${PORT}")
 # endif()
-
-# Run the Python script
+# Run the Python script using the setup_venv.sh script
 execute_process(
-	COMMAND python3 scripts/esp32_model_deploy_helper.py ${MODEL_FILE} #--port ${PORT}
+	COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/setup_venv.sh ${CMAKE_SOURCE_DIR}/scripts/esp32_model_deploy_helper.py ${MODEL_FILE}
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 	RESULT_VARIABLE SCRIPT_RESULT
 )
 if(NOT SCRIPT_RESULT EQUAL 0)
-	message(FATAL_ERROR "Failed to execute esp32_model_deploy_helper.py")
+	message(FATAL_ERROR "Failed to execute esp32_model_deploy_helper.py in virtual environment")
 endif()
+
+# Run the Python script
+# execute_process(
+# 	COMMAND python3 scripts/esp32_model_deploy_helper.py ${MODEL_FILE} #--port ${PORT}
+# 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+# 	RESULT_VARIABLE SCRIPT_RESULT
+# )
+# if(NOT SCRIPT_RESULT EQUAL 0)
+# 	message(FATAL_ERROR "Failed to execute esp32_model_deploy_helper.py")
+# endif()
 
 # Set default values for environment variables
 if(DEFINED ENV{FIRMWARE_VERSION})
