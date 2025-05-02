@@ -9,13 +9,8 @@
 tflite::MicroMutableOpResolver<7>* get_micro_op_resolver(tflite::ErrorReporter* error_reporter) {
     auto* resolver = new tflite::MicroMutableOpResolver<7>();
 
-    if (resolver->AddConv2D() != kTfLiteOk) {
-        error_reporter->Report("AddConv2D failed");
-        vTaskDelete(NULL);
-    }
-
-    if (resolver->AddQuantize() != kTfLiteOk) {
-        error_reporter->Report("AddQuantize failed");
+    if (resolver->AddMean() != kTfLiteOk) {
+        error_reporter->Report("AddMean failed");
         vTaskDelete(NULL);
     }
 
@@ -24,8 +19,18 @@ tflite::MicroMutableOpResolver<7>* get_micro_op_resolver(tflite::ErrorReporter* 
         vTaskDelete(NULL);
     }
 
+    if (resolver->AddConv2D() != kTfLiteOk) {
+        error_reporter->Report("AddConv2D failed");
+        vTaskDelete(NULL);
+    }
+
     if (resolver->AddSoftmax() != kTfLiteOk) {
         error_reporter->Report("AddSoftmax failed");
+        vTaskDelete(NULL);
+    }
+
+    if (resolver->AddQuantize() != kTfLiteOk) {
+        error_reporter->Report("AddQuantize failed");
         vTaskDelete(NULL);
     }
 
@@ -36,11 +41,6 @@ tflite::MicroMutableOpResolver<7>* get_micro_op_resolver(tflite::ErrorReporter* 
 
     if (resolver->AddDequantize() != kTfLiteOk) {
         error_reporter->Report("AddDequantize failed");
-        vTaskDelete(NULL);
-    }
-
-    if (resolver->AddMean() != kTfLiteOk) {
-        error_reporter->Report("AddMean failed");
         vTaskDelete(NULL);
     }
 

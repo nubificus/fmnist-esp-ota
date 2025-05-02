@@ -3,9 +3,12 @@ set(CMAKE_CXX_STANDARD 17)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 # Allow user to specify the model file and port for the python script
-if(NOT DEFINED MODEL_FILE)
+if(NOT DEFINED ENV{MODEL_FILE})
 	set(MODEL_FILE "models/mobilenet_frozen_quantized_int8.tflite")
 	message(WARNING "MODEL_FILE is not set, using default: ${MODEL_FILE}")
+else()
+	set(MODEL_FILE $ENV{MODEL_FILE})
+	message("MODEL_FILE is set to: ${MODEL_FILE}")
 endif()
 
 # if(NOT DEFINED PORT)
@@ -14,7 +17,7 @@ endif()
 # endif()
 # Run the Python script using the setup_venv.sh script
 execute_process(
-	COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/setup_venv.sh ${CMAKE_SOURCE_DIR}/scripts/esp32_model_deploy_helper.py ${MODEL_FILE}
+	COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/setup_env.sh python3 ${CMAKE_SOURCE_DIR}/scripts/esp32_model_deploy_helper.py ${MODEL_FILE} #--port ${PORT}
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 	RESULT_VARIABLE SCRIPT_RESULT
 )
