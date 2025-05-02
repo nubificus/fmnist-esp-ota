@@ -3,11 +3,11 @@ set(CMAKE_CXX_STANDARD 17)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 # Allow user to specify the model file and port for the python script
-if(NOT DEFINED ENV{MODEL_FILE})
+if(NOT DEFINED $ENV{model})
 	set(MODEL_FILE "models/mobilenet_frozen_quantized_int8.tflite")
 	message(WARNING "MODEL_FILE is not set, using default: ${MODEL_FILE}")
 else()
-	set(MODEL_FILE $ENV{MODEL_FILE})
+	set(MODEL_FILE $ENV{model})
 	message("MODEL_FILE is set to: ${MODEL_FILE}")
 endif()
 
@@ -37,7 +37,7 @@ endif()
 
 # Set default values for environment variables
 if(DEFINED ENV{FIRMWARE_VERSION})
-	add_compile_definitions(FIRMWARE_VERSION=\"$ENV{FIRMWARE_VERSION}\")
+	add_compile_definitions(FIRMWARE_VERSION=\"$ENV{version}\")
 else()
 	add_compile_definitions(FIRMWARE_VERSION="1.1.1")
 	message(WARNING "FIRMWARE_VERSION is not set, using default value")
@@ -51,7 +51,7 @@ else()
 endif()
 
 if(DEFINED ENV{APPLICATION_TYPE})
-	add_compile_definitions(APPLICATION_TYPE=\"$ENV{APPLICATION_TYPE}\")
+	add_compile_definitions(APPLICATION_TYPE=\"$ENV{type}\")
 else()
 	add_compile_definitions(APPLICATION_TYPE="simple_cnn")
 	message(WARNING "APPLICATION_TYPE is not set, using default value")
