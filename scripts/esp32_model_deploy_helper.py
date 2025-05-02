@@ -173,10 +173,10 @@ def main():
 		print(f"Model file {model_path} does not exist.")
 		sys.exit(1)
 
-	load_from_partition = os.getenv("LOAD_MODEL_FROM_PARTITION") == "1"
-	if load_from_partition and not port:
-		print("Error: --port is required when LOAD_MODEL_FROM_PARTITION=1")
-		sys.exit(1)
+	# load_from_partition = os.getenv("LOAD_MODEL_FROM_PARTITION") == "1"
+	# if load_from_partition and not port:
+	# 	print("Error: --port is required when LOAD_MODEL_FROM_PARTITION=1")
+	# 	sys.exit(1)
 
 	# If the user wants to load the model from a partition, we need to check that
 	# the partition in the partition table is large enough and then write the model to it.

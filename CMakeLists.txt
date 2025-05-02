@@ -8,14 +8,14 @@ if(NOT DEFINED MODEL_FILE)
 	message(WARNING "MODEL_FILE is not set, using default: ${MODEL_FILE}")
 endif()
 
-if(NOT DEFINED PORT)
-	set(PORT "/dev/ttyUSB2")
-	message(WARNING "PORT is not set, using default: ${PORT}")
-endif()
+# if(NOT DEFINED PORT)
+# 	set(PORT "/dev/ttyUSB2")
+# 	message(WARNING "PORT is not set, using default: ${PORT}")
+# endif()
 
 # Run the Python script
 execute_process(
-	COMMAND python3 scripts/esp32_model_deploy_helper.py ${MODEL_FILE} --port ${PORT}
+	COMMAND python3 scripts/esp32_model_deploy_helper.py ${MODEL_FILE} #--port ${PORT}
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 	RESULT_VARIABLE SCRIPT_RESULT
 )
@@ -78,7 +78,7 @@ else()
 	message(WARNING "Loading model from the micro_model.cpp file")
 endif()
 
-if(DEFINED ENV{INTERNAL_MEMORY_USAGE})
+if(NOT DEFINED ENV{INTERNAL_MEMORY_USAGE})
 	add_compile_definitions(INTERNAL_MEMORY_USAGE)
 	message("Using internal RAM configuration")
 	execute_process(
