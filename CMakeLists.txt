@@ -36,7 +36,7 @@ endif()
 # endif()
 
 # Set default values for environment variables
-if(DEFINED ENV{FIRMWARE_VERSION})
+if(DEFINED ENV{version})
 	add_compile_definitions(FIRMWARE_VERSION=\"$ENV{version}\")
 else()
 	add_compile_definitions(FIRMWARE_VERSION="1.1.1")
@@ -50,7 +50,7 @@ else()
 	message(WARNING "DEVICE_TYPE is not set, using default value")
 endif()
 
-if(DEFINED ENV{APPLICATION_TYPE})
+if(DEFINED ENV{type})
 	add_compile_definitions(APPLICATION_TYPE=\"$ENV{type}\")
 else()
 	add_compile_definitions(APPLICATION_TYPE="simple_cnn")
