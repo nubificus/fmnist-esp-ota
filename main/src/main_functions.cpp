@@ -25,7 +25,7 @@
 
 #include "esp_heap_caps.h"
 
-#ifndef INTERNAL_MEMORY_USAGE 
+#ifdef ENABLE_PSRAM 
 #include "esp_psram.h"
 #endif
 
@@ -91,7 +91,7 @@ void PerformWarmup(int warmup_runs) {
 }
 
 void allocate_tensor_arena() {
-#ifdef INTERNAL_MEMORY_USAGE
+#ifndef ENABLE_PSRAM
 	// Allocate tensor arena in internal RAM
 	tensor_arena = (uint8_t *) heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_INTERNAL);
 	if (tensor_arena) {

@@ -8,7 +8,6 @@ import json
 import shutil
 from ai_edge_litert.interpreter import Interpreter
 import requests
-import tempfile
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PARTITIONS_CSV_PATH = os.path.join(SCRIPT_DIR, "../partitions.csv")
@@ -19,41 +18,6 @@ MICRO_OPS_HEADER_URL = "https://raw.githubusercontent.com/tensorflow/tflite-micr
 MICRO_OPS_JSON_PATH = os.path.join(SCRIPT_DIR, "micro_ops.json")
 MICRO_OPS_CPP_PATH = os.path.join(SCRIPT_DIR, "../main/src/micro_ops.cpp")
 MICRO_OPS_HEADER_PATH = os.path.join(SCRIPT_DIR, "../main/inc/micro_ops.h")
-
-# Returns the offset and size of the tflite_model partition from the partitions.csv file
-def parse_partitions_csv():
-	with open(PARTITIONS_CSV_PATH, 'r') as f:
-		lines = f.readlines()
-
-	offset = None
-	size = None
-	for line in lines:
-		if line.strip().startswith(TFLITE_MODEL_PARTITION_NAME):
-			parts = [x.strip() for x in line.strip().split(',')]
-			offset = int(parts[3], 16)
-			size = int(parts[4], 16)
-			return offset, size, lines
-
-	raise RuntimeError("Partition tflite_model not found in CSV")
-
-# Updates the size of the tflite_model partition in the partitions.csv file
-def update_partitions_csv(new_size, lines):
-	updated = []
-	for line in lines:
-		if line.strip().startswith(TFLITE_MODEL_PARTITION_NAME):
-			parts = [x.strip() for x in line.strip().split(',')]
-			parts[4] = f"0x{new_size:X}"
-			updated.append(', '.join(parts) + '\n')
-		else:
-			updated.append(line)
-	with open(PARTITIONS_CSV_PATH, 'w') as f:
-		f.writelines(updated)
-
-# Writes the model to the specified partition using esptool
-def write_model_to_partition(model_path, offset, port):
-	subprocess.run([
-		"esptool.py", "--port", port, "--no-stub", "write_flash", f"0x{offset:X}", model_path
-	], check=True)
 
 # Generates a C array from the model file using xxd
 def generate_cpp_array(model_path):
@@ -162,11 +126,9 @@ def generate_micro_ops_header(op_count):
 def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument("model_path", help="Path to .tflite model")
-	parser.add_argument("--port", help="Serial port for esptool (required if loading from partition)")
 	args = parser.parse_args()
 
 	model_path = args.model_path
-	port = args.port
 
 	# Check if the model file exists
 	if not os.path.exists(model_path):
@@ -174,34 +136,10 @@ def main():
 		sys.exit(1)
 
 	load_from_partition = os.getenv("LOAD_MODEL_FROM_PARTITION") == "1"
-	# if load_from_partition and not port:
-	# 	print("Error: --port is required when LOAD_MODEL_FROM_PARTITION=1")
-	# 	sys.exit(1)
 
-	# If the user wants to load the model from a partition, we need to check that
-	# the partition in the partition table is large enough and then write the model to it.
-	# Otherwise, we generate a C array from the model file.
-	if load_from_partition:
-		model_size = os.stat(model_path).st_size
-		env_script_path = os.path.join(SCRIPT_DIR, "env.sh")
-
-		# Create the env.sh script
-		with open(env_script_path, "w") as env_script:
-			env_script.write(f"# Model: {model_path}\n")
-			env_script.write(f"export TFLITE_MODEL_SIZE={model_size}\n")
-
-		print(f"Environment script created: {env_script_path}")
-		print(f"Run 'source {env_script_path}' to export TFLITE_MODEL_SIZE={model_size}")
-
-		# Extend the partition size if the model is larger than the partition
-		offset, partition_size, csv_lines = parse_partitions_csv()
-		if model_size > partition_size:
-			update_partitions_csv(model_size, csv_lines)
-
-		# Write the model to the partition
-		# write_model_to_partition(model_path, offset, port)
-	else:
-		# Generate the micro_model.cpp file with the model data
+	# If the user doesn't want to load the model from a partition,
+	# we generate the micro_model.cpp file with the model data
+	if not load_from_partition:
 		generate_cpp_array(model_path)
 
 	# Find the model operations

@@ -5,32 +5,12 @@
 #include "freertos/task.h"
 #include "micro_ops.h"
 
-// Model: models/mobilenet_frozen_quantized_int8.tflite
+// Model: models/resnet8_frozen.tflite
 tflite::MicroMutableOpResolver<7>* get_micro_op_resolver(tflite::ErrorReporter* error_reporter) {
     auto* resolver = new tflite::MicroMutableOpResolver<7>();
 
-    if (resolver->AddMean() != kTfLiteOk) {
-        error_reporter->Report("AddMean failed");
-        vTaskDelete(NULL);
-    }
-
-    if (resolver->AddDepthwiseConv2D() != kTfLiteOk) {
-        error_reporter->Report("AddDepthwiseConv2D failed");
-        vTaskDelete(NULL);
-    }
-
-    if (resolver->AddConv2D() != kTfLiteOk) {
-        error_reporter->Report("AddConv2D failed");
-        vTaskDelete(NULL);
-    }
-
-    if (resolver->AddSoftmax() != kTfLiteOk) {
-        error_reporter->Report("AddSoftmax failed");
-        vTaskDelete(NULL);
-    }
-
-    if (resolver->AddQuantize() != kTfLiteOk) {
-        error_reporter->Report("AddQuantize failed");
+    if (resolver->AddAdd() != kTfLiteOk) {
+        error_reporter->Report("AddAdd failed");
         vTaskDelete(NULL);
     }
 
@@ -39,8 +19,28 @@ tflite::MicroMutableOpResolver<7>* get_micro_op_resolver(tflite::ErrorReporter* 
         vTaskDelete(NULL);
     }
 
-    if (resolver->AddDequantize() != kTfLiteOk) {
-        error_reporter->Report("AddDequantize failed");
+    if (resolver->AddConv2D() != kTfLiteOk) {
+        error_reporter->Report("AddConv2D failed");
+        vTaskDelete(NULL);
+    }
+
+    if (resolver->AddMean() != kTfLiteOk) {
+        error_reporter->Report("AddMean failed");
+        vTaskDelete(NULL);
+    }
+
+    if (resolver->AddSoftmax() != kTfLiteOk) {
+        error_reporter->Report("AddSoftmax failed");
+        vTaskDelete(NULL);
+    }
+
+    if (resolver->AddMaxPool2D() != kTfLiteOk) {
+        error_reporter->Report("AddMaxPool2D failed");
+        vTaskDelete(NULL);
+    }
+
+    if (resolver->AddMul() != kTfLiteOk) {
+        error_reporter->Report("AddMul failed");
         vTaskDelete(NULL);
     }
 
