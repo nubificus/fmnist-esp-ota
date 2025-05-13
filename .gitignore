@@ -12,6 +12,7 @@ dependencies.lock
 # ESP-IDF
 sdkconfig
 sdkconfig.old
+sdkconfig.defaults
 tools
 
 # Visual Studio Code
