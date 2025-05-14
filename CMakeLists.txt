@@ -120,14 +120,14 @@ endif()
 if(DEFINED ENV{load_model_from_partition})
 	message(STATUS "Running ptmaker.sh with model file: ${MODEL_FILE}")
 	execute_process(
-		COMMAND bash -c "source ${CMAKE_SOURCE_DIR}/scripts/ptmaker.sh ${FLASH_SIZE} ${MODEL_FILE} > ${CMAKE_SOURCE_DIR}/partitions.csv"
+		COMMAND bash -c ". ${CMAKE_SOURCE_DIR}/scripts/ptmaker.sh ${FLASH_SIZE} ${MODEL_FILE} > ${CMAKE_SOURCE_DIR}/partitions.csv"
 		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 		RESULT_VARIABLE PT_RESULT
 	)
 else()
 	message(STATUS "Running ptmaker.sh without model file")
 	execute_process(
-		COMMAND bash -c "source ${CMAKE_SOURCE_DIR}/scripts/ptmaker.sh ${FLASH_SIZE} > ${CMAKE_SOURCE_DIR}/partitions.csv"
+		COMMAND bash -c ". ${CMAKE_SOURCE_DIR}/scripts/ptmaker.sh ${FLASH_SIZE} > ${CMAKE_SOURCE_DIR}/partitions.csv"
 		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 		RESULT_VARIABLE PT_RESULT
 	)
