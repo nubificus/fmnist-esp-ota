@@ -15,6 +15,9 @@ sdkconfig.old
 sdkconfig.defaults
 tools
 
+# Firmware folder
+firmware
+
 # Visual Studio Code
 .vscode
 

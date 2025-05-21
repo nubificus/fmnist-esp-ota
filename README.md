@@ -22,75 +22,150 @@ the memory and has a single input and a single output tensor.
 
 2. Define the environment variables necessary for the project. These are the following:
 
-	* **FIRMWARE_VERSION**: the version of that app used to distinguish it from others.
-	* **DEVICE_TYPE**: the type of esp32 device that this project will be compiled for (it should be the same as the one used in `idf.py set-target`).
-	* **APPLICATION_TYPE**: the kind of application that will be compiled. In our case it should be named after the tflite model type used.
-	* **MODEL_FILE**: this is the path to the tflite model of choice
-	* **PORT**: the port to which the esp32 device is connected
-	* **TENSOR_ALLOCATION_SPACE**: the size of space that should be allocated (in internal RAM / external PSRAM) for storing the model's tensors.
-	* **LOAD_MODEL_FROM_PARTITION**: defined when the tflite model should be read from a flash partition. Otherwise, the model is extracted from a C array found in the `micro_model.cpp` file.
-	* **INTERNAL_MEMORY_USAGE**: defined when the space for the tensors should be allocated from the internal RAM. Otherwise, the larger but slower external PSRAM is used.
-	* **WIFI_SSID**: the WiFi SSID that the esp32 device should connect to.
-	* **WIFI_PASS**: the WiFi password of the defined WiFi SSID
-	* **STOCK**: defined when the app does not need OTA update support
-	* **OTA_SECURE**: defined to enable secure OTA update support. **STOCK** should not be set along with this option.
+	* `DEVICE_TYPE`: the type of esp32 device that this project will be compiled for (it should be the same as the one used in `idf.py set-target`).
+	* `WIFI_SSID`: the WiFi SSID that the esp32 device should connect to.
+	* `WIFI_PASS`: the WiFi password of the defined WiFi SSID
+	* `version`: the version of that app used to distinguish it from others.
+	* `type`: the kind of application that will be compiled. In our case it should be named after the tflite model type used.
+	* `model`: this is the path to the tflite model of choice
+	* `tensor_allocation_space`: the size of space that should be allocated (in internal RAM / external PSRAM) for storing the model's tensors.
+	* `load_model_from_partition`: defined when the tflite model should be read from a flash partition. Otherwise, the model is extracted from a C array found in the `micro_model.cpp` file.
+	* `tflite_model_size`: this is the size of the tflite model found in `model` and is defined by the `scripts/prebuild.sh` script.
+	* `quad_psram`: defined when the space for the tensors should be allocated from the quad external PSRAM.
+	* `oct_psram`: defined when the space for the tensors should be allocated from the octal external PSRAM. If neither `quad_psram` nor `oct_psram` is defined, then the smaller but faster internal RAM is used.
+	* `STOCK`: defined when the app does not need OTA update support.
+	* `OTA_SECURE`: defined to enable secure OTA update support. `STOCK` should not be set along with this option.
 
-	Assuming we aim to deploy the custom *mobilenet* tflite model inside the `models` directory from a flash partition by using the external PSRAM for tensor allocation and enabling non-secure OTA update support, we should do the following:
+	Assuming we aim to deploy the custom *resnet8* tflite model inside the `models` directory without a flash partition, using the external octal PSRAM for tensor allocation and enabling secure OTA update support, we should do the following:
 
 	```bash
-	export FIRMWARE_VERSION="0.1.0"
 	export DEVICE_TYPE="esp32s3"
-	export APPLICATION_TYPE="mobilenet"
-	export MODEL_FILE="models/mobilenet_frozen_quantized_int8.tflite"
-	export PORT="dev/ttyUSB2"
-	# This is found by trial and error(e.g. mobilenet needs about 302KB)
-	export TENSOR_ALLOCATION_SPACE=$((400 * 1024))
-	# The tflite model should be expected in a certain partition
-	export LOAD_MODEL_FROM_PARTITION=1
 	export WIFI_SSID=<wifi_ssid>
 	export WIFI_PASS=<wifi_pass>
+
+	export version="1.1.1"
+	export type="resnet8"
+	export model="models/resnet8_frozen.tflite"
+	export tensor_allocation_space=$((200 * 1024))
+
+	export oct_psram=""
+	export OTA_SECURE=""
 	```
 
-3. Set the target device, build and flash the project
+3. Run the prebuild script
 
 	```bash
-	mkdir build
+	. ./scripts/prebuild.sh
+	```
+
+	This script does the following:
+	* Constructs an appropriate `sdkconfig.defaults` based on the existence of `quad_psram` and `oct_psram`.
+	* Defines the `tflite_model_size` environment variable based on the `model` environment variable.
+	* Creates a python virtual environment for running the `scripts/tflite_micro_helper.py` script.
+
+	The `scripts/tflite_micro_helper.py` script, which expects the `model` environment variable, is used for:
+	* Creating the `src/micro_model.cpp` file if `load_model_from_partition` is not defined.
+	* Creating the `src/micro_ops.cpp` and `inc/micro_ops.h` which implement the function `get_micro_op_resolver()`. That function uniquely defines the operations used by the model of choice. In our example the function generated is the following:
+
+		```c++
+		tflite::MicroMutableOpResolver<7>* get_micro_op_resolver(tflite::ErrorReporter* error_reporter) {
+			auto* resolver = new tflite::MicroMutableOpResolver<7>();
+
+			if (resolver->AddMaxPool2D() != kTfLiteOk) {
+				error_reporter->Report("AddMaxPool2D failed");
+				vTaskDelete(NULL);
+			}
+
+			if (resolver->AddSoftmax() != kTfLiteOk) {
+				error_reporter->Report("AddSoftmax failed");
+				vTaskDelete(NULL);
+			}
+
+			if (resolver->AddMean() != kTfLiteOk) {
+				error_reporter->Report("AddMean failed");
+				vTaskDelete(NULL);
+			}
+
+			if (resolver->AddMul() != kTfLiteOk) {
+				error_reporter->Report("AddMul failed");
+				vTaskDelete(NULL);
+			}
+
+			if (resolver->AddFullyConnected() != kTfLiteOk) {
+				error_reporter->Report("AddFullyConnected failed");
+				vTaskDelete(NULL);
+			}
+
+			if (resolver->AddConv2D() != kTfLiteOk) {
+				error_reporter->Report("AddConv2D failed");
+				vTaskDelete(NULL);
+			}
+
+			if (resolver->AddAdd() != kTfLiteOk) {
+				error_reporter->Report("AddAdd failed");
+				vTaskDelete(NULL);
+			}
+
+			return resolver;
+		}
+		```
+
+4. Set the target device and build the project
+
+	```bash
 	idf.py set-target <DEVICE_TYPE>
 	idf.py build
-	idf.py --port <PORT> flash
 	```
 
-	During the building process, the `scripts/esp32_model_deploy_helper.py` script is called which essentially does all the model-specific configurations in order for our tflite deployment app to work. It does the following:
-	* Checks if you have exported the **LOAD_MODEL_FROM_PARTITION** variable and creates the `scripts/env.sh` script which defines the **TFLITE_MODEL_SIZE** variable. In that case, it also extends the `tflite_model` partition in the `partitions.csv` file if necessary and writes the model on the esp32 device's flash memory using the esptool.
-	* If **LOAD_MODEL_FROM_PARTITION** is not set, then the python script creates the `src/micro_model.cpp` so that the building process can bind the model into the final executable.
-	* It finds the micro operations used by the model and creates the `main/inc/micro_ops.h` and `main/src/micro_ops.cpp` which define the `get_micro_op_resolver()` function that is needed by the `setup()` function.
+5. Use the firmware assembler to optionally sign the app and finally bundle the firmware:
 
-4. Finally, run the application with `idf.py --port <PORT> monitor` and the logging should be similar to the following:
+	In our example, we want to have secure mode enabled so we need to inlcude the **--secure_boot** option
 	```bash
-	I (2150) wifi: STA IP: 192.168.11.57
-	I (2150) wifi: Connected to ap
-	I (2150) main: HTTP Server started
-	I (2150) main: OTA Handler set
-	I (2150) main: Info handler set
-	I (2160) allocate_tensor_arena: PSRAM is available! Total size: 2097152 bytes
-	I (2160) allocate_tensor_arena: Tensor arena allocated in PSRAM (409600 bytes)
-	I (2670) load_model_from_partition: Model successfully mapped from flash
-	I (2710) setup: Used tensor arena: 308936 bytes
-	I (2710) setup: Performing warmup runs...
-	I (13930) setup: Completed 10 warmup runs.
-	I (13930) tcp_server: Server is listening on port 1234
-	I (13930) tcp_server: Waiting for client connection...
+	bash scripts/assemble_firmware.sh --secure_boot
 	```
 
-When **INTERNAL_MEMORY_USAGE** is **not defined**, but your device does not provide PSRAM support, you should define it and remove every *CONFIG_SPIRAM* option from `sdkconfig.defaults` before building the app. If you have already built the app, remove everything and start from scratch as shown below:
+	You should expect a firmware directory of the following structure:
+	```bash
+	firmware/
+	├── esp32s3
+	│   └── artifacts
+	│       ├── bootloader.bin
+	│       ├── esp_tflite_app.bin
+	│       ├── ota_data_initial.bin
+	│       ├── partitions.csv
+	│       ├── partition-table.bin
+	│       └── sdkconfig
+	└── model.bin
+	```
 
-```bash
-rm -rf build
-rm -f sdkconfig
-mkdir build
-idf.py set-target <DEVICE_TYPE>
-idf.py build
-idf.py --port <PORT> flash monitor
-```
+	**WARNING**: The `scripts/assemble_firmware.sh` script assumes that the *signing version is 2* and that the key resides in the `./secure_boot_signing_key.pem` file
 
-If you want to change an environment variable controlling the project, ideally you should do `idf.py fullclean` and then rebuild the project.
+6. Use the flasher to flash the application on the esp32
+
+	To do that you need to use the `scripts/flasher.sh` script, which offers the option to override the default partition table and build a new one with the `scripts/ptmaker.sh`. You have the following partition table options that are passed from the flasher to the ptmaker:
+	* `normal`: creates three app partitions (one factory and two ota).
+	* `normal_with_model`: creates three app partitions (one factory and two ota) and a custom tflite_model partition.
+	* `no_factory`: creates two app partitions (two ota and the app will be placed in ota_0).
+	* `no_factory_with_model`: creates two app partitions (two ota and the app will be placed in ota_0) and a custom tflite_model partition.
+
+	Note that the flash size is also passed as an argument and it is used to expand the partitions based on the hardware capabilities.
+	Bearing all that in mind, we should do the following to replace the current partition table with a `normal` one, which will exploit all our device's flash memory, and flash the proper binaries to that device:
+	```bash
+	bash scripts/flasher.sh --port <PORT> --chip <DEVICE_TYPE> --flash_size <FLASH_SIZE> --override_pt normal
+	```
+
+7. Finally, run the application with `idf.py --port <PORT> monitor` and the logging should be similar to the following:
+	```bash
+	I (2519) wifi: STA IP: 192.168.11.133
+	I (2519) wifi: Connected to ap
+	I (2519) main: HTTP Server started
+	I (2519) main: OTA Handler set
+	I (2529) main: Info handler set
+	I (2529) allocate_tensor_arena: PSRAM is available! Total size: 8388608 bytes
+	I (2539) allocate_tensor_arena: Tensor arena allocated in PSRAM (204800 bytes)
+	I (3039) setup: Used tensor arena: 154764 bytes
+	I (3039) setup: Performing warmup runs...
+	I (21449) [setup]: Completed 10 warmup runs.
+	I (21449) [tcp_server]: Server is listening on port 1234
+	I (21449) tcp_server: Waiting for client connection...
+	```

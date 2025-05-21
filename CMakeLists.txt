@@ -18,14 +18,6 @@ else()
 	message(WARNING "DEVICE_TYPE is not set, using default value")
 endif()
 
-if(NOT DEFINED ENV{FLASH_SIZE})
-	set(FLASH_SIZE "4MB")
-	message(WARNING "FLASH_SIZE is not set, using default: ${FLASH_SIZE}")
-else()
-	set(FLASH_SIZE $ENV{FLASH_SIZE})
-	message("FLASH_SIZE is set to: ${FLASH_SIZE}")
-endif()
-
 if(DEFINED ENV{WIFI_SSID})
 	add_compile_definitions(WIFI_SSID=\"$ENV{WIFI_SSID}\")
 else()
@@ -70,14 +62,6 @@ else()
 	message(WARNING "APPLICATION_TYPE is not set, using default value")
 endif()
 
-if(NOT DEFINED ENV{model})
-	set(MODEL_FILE "models/simple_cnn_tf_frozen.tflite")
-	message(WARNING "MODEL_FILE is not set, using default: ${MODEL_FILE}")
-else()
-	set(MODEL_FILE $ENV{model})
-	message("MODEL_FILE is set to: ${MODEL_FILE}")
-endif()
-
 if (DEFINED ENV{tensor_allocation_space})
 	math(EXPR TENSOR_ALLOCATION_SPACE_VALUE "$ENV{tensor_allocation_space}")
 	add_compile_definitions(TENSOR_ALLOCATION_SPACE=${TENSOR_ALLOCATION_SPACE_VALUE})
@@ -91,64 +75,26 @@ endif()
 if(DEFINED ENV{load_model_from_partition})
 	add_compile_definitions(LOAD_MODEL_FROM_PARTITION)
 	message("Loading model from flash partition")
+
+	if (DEFINED ENV{tflite_model_size})
+		math(EXPR TFLITE_MODEL_SIZE_VALUE "$ENV{tflite_model_size}")
+		add_compile_definitions(TFLITE_MODEL_SIZE=${TFLITE_MODEL_SIZE_VALUE})
+		message("TFLITE_MODEL_SIZE is set to ${TFLITE_MODEL_SIZE_VALUE}")
+	else()
+		message(FATAL_ERROR "TFLITE_MODEL_SIZE is not set")
+	endif()
 else()
 	message(WARNING "Loading model from the micro_model.cpp file")
 endif()
 
-if(DEFINED ENV{enable_psram})
+if(DEFINED ENV{quad_psram})
 	add_compile_definitions(ENABLE_PSRAM)
-	message("Using PSRAM configuration")
-	execute_process(
-		COMMAND bash -c "cp ${CMAKE_SOURCE_DIR}/sdkconfig.defaults.psram ${CMAKE_SOURCE_DIR}/sdkconfig.defaults"
-		RESULT_VARIABLE COPY_RESULT
-	)
-	if(NOT COPY_RESULT EQUAL 0)
-		message(FATAL_ERROR "Failed to copy sdkconfig.defaults.psram to sdkconfig.defaults")
-	endif()
-else() # Enable internal RAM configuration
+	message("Using quad PSRAM configuration")
+elseif(DEFINED ENV{oct_psram})
+	add_compile_definitions(ENABLE_PSRAM)
+	message("Using octal PSRAM configuration")
+else()
 	message("Using internal RAM configuration")
-	execute_process(
-		COMMAND bash -c "cp ${CMAKE_SOURCE_DIR}/sdkconfig.defaults.internal ${CMAKE_SOURCE_DIR}/sdkconfig.defaults"
-		RESULT_VARIABLE COPY_RESULT
-	)
-	if(NOT COPY_RESULT EQUAL 0)
-		message(FATAL_ERROR "Failed to copy sdkconfig.defaults.internal to sdkconfig.defaults")
-	endif()
-endif()
-
-# Run ptmaker.sh to generate the partition table
-if(DEFINED ENV{load_model_from_partition})
-	message(STATUS "Running ptmaker.sh with model file: ${MODEL_FILE}")
-	execute_process(
-		COMMAND bash -c ". ${CMAKE_SOURCE_DIR}/scripts/ptmaker.sh ${FLASH_SIZE} ${MODEL_FILE} > ${CMAKE_SOURCE_DIR}/partitions.csv"
-		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-		RESULT_VARIABLE PT_RESULT
-	)
-else()
-	message(STATUS "Running ptmaker.sh without model file")
-	execute_process(
-		COMMAND bash -c ". ${CMAKE_SOURCE_DIR}/scripts/ptmaker.sh ${FLASH_SIZE} > ${CMAKE_SOURCE_DIR}/partitions.csv"
-		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-		RESULT_VARIABLE PT_RESULT
-	)
-endif()
-
-if(NOT PT_RESULT EQUAL 0)
-	message(FATAL_ERROR "ptmaker.sh failed to generate partitions.csv")
-else()
-	message(STATUS "Partition table generated with FLASH_SIZE=${FLASH_SIZE}")
-endif()
-
-# Use the temp_venv_runner.sh script to run the python script responsible for setting up the model-specific files
-execute_process(
-	COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/temp_venv_runner.sh ${CMAKE_SOURCE_DIR}/scripts/tflite_micro_helper.py ${MODEL_FILE}
-	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-	RESULT_VARIABLE SCRIPT_RESULT
-)
-if(NOT SCRIPT_RESULT EQUAL 0)
-	message(FATAL_ERROR "Failed to execute tflite_micro_helper.py in virtual environment")
-else()
-	message(STATUS "tflite_micro_helper.py executed successfully")
 endif()
 
 project(esp_tflite_app)

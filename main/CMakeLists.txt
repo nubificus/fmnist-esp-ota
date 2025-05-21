@@ -23,7 +23,7 @@ else ()
 	message("Adding micro_model.cpp to the sources")
 endif()
 
-if (DEFINED ENV{enable_psram})
+if (DEFINED ENV{quad_psram} OR DEFINED ENV{oct_psram})
 	list(APPEND REQUIRES_LIST esp_psram)
 	message("Adding esp_psram dependency")
 endif()
