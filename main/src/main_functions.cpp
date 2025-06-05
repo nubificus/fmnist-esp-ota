@@ -21,11 +21,13 @@
 
 #include "esp_timer.h"
 #include "esp_log.h"
+#include "esp_system.h"
+#include "esp_chip_info.h"
 #include "esp_task_wdt.h"
 
 #include "esp_heap_caps.h"
 
-#ifndef INTERNAL_MEMORY_USAGE 
+#ifdef ENABLE_PSRAM 
 #include "esp_psram.h"
 #endif
 
@@ -63,10 +65,19 @@ namespace {
 }
 
 void PerformWarmup(int warmup_runs) {
+	esp_chip_info_t chip_info;
+	esp_chip_info(&chip_info);
+
+	uint32_t core_mask = 0;
+	// Set the core mask to include all available cores
+	for (int i = 0; i < chip_info.cores; i++) {
+		core_mask |= (1 << i);
+	}
+
 	// Increase watchdog timeout to 20 seconds
 	esp_task_wdt_config_t config = {
 		.timeout_ms = 20000,  // Set timeout to 20 sec
-		.idle_core_mask = (1 << 0) | (1 << 1),  // Apply to both cores
+		.idle_core_mask = core_mask,  // Apply to all cores
 		.trigger_panic = false  // Don't trigger panic, just log warning
 	};
 
@@ -91,7 +102,7 @@ void PerformWarmup(int warmup_runs) {
 }
 
 void allocate_tensor_arena() {
-#ifdef INTERNAL_MEMORY_USAGE
+#ifndef ENABLE_PSRAM
 	// Allocate tensor arena in internal RAM
 	tensor_arena = (uint8_t *) heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_INTERNAL);
 	if (tensor_arena) {
@@ -231,11 +242,19 @@ void setup(tcp_server_t *server) {
 
 void handle_client(void *args) {
 	int client_socket = (int)args;
+	esp_chip_info_t chip_info;
+	esp_chip_info(&chip_info);
+
+	uint32_t core_mask = 0;
+	// Set the core mask to include all available cores
+	for (int i = 0; i < chip_info.cores; i++) {
+		core_mask |= (1 << i);
+	}
 
 	// Increase watchdog timeout to 20 seconds
 	esp_task_wdt_config_t config = {
 		.timeout_ms = 20000,  // Set timeout to 20 sec
-		.idle_core_mask = (1 << 0) | (1 << 1),  // Apply to both cores
+		.idle_core_mask = core_mask,  // Apply to all cores
 		.trigger_panic = false  // Don't trigger panic, just log warning
 	};
 
